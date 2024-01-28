@@ -1,42 +1,58 @@
 ﻿using Microsoft.AspNetCore.SignalR;
 using SignalR.GameLogic;
 
-namespace SignalR.Hubs
+namespace SignalR.Hubs;
+
+public class GameHub : Hub<IGameHub>
 {
-    public class GameHub : Hub
+    public static GameManager _manager = new();
+
+    public static Dictionary<string, string> _players = new();
+
+    public async Task Register(string name)
     {
-        public static GameManager _manager = new();
+        var group = _manager.Register(name);
+        
+        await Groups.AddToGroupAsync(Context.ConnectionId, group.Name);
+        _players.TryAdd(Context.ConnectionId, name);
 
-        public async Task Register(string name)
+        if (group.Full)
+            await Clients.Group(group.Name).GameStarted(group.Game.Player1.Name,
+                                                                     group.Game.Player2.Name,
+                                                                     group.Name);
+        else
+            await Clients.Caller.WaitingForPlayer();
+    }
+
+    public async Task Throw(string groupName, string player, string selection)
+    {
+        var game = _manager.Throw(groupName, player, Enum.Parse<Sign>(selection, true));
+
+        if (game.Pending)
+            await Clients.Group(groupName).Pending(game.WaitingFor);
+        else
         {
-            var group = _manager.Register(name);
+            var winner = game.Winner;
+            var explanation = game.Explanation;
 
-            await Groups.AddToGroupAsync(Context.ConnectionId, group.Name);
+            game.Reset();
 
-            if (group.Full)
-                await Clients.Group(group.Name).SendAsync("GameStarted", group.Game.Player1.Name, group.Game.Player2.Name, group.Name);
+            if (winner == null)
+                await Clients.Group(groupName).Drawn(explanation, game.Scores);
             else
-                await Clients.Caller.SendAsync("WaitingForPlayer");
+                await Clients.Group(groupName).Won(winner, explanation, game.Scores);
         }
+    }
 
-        public async Task Throw(string groupName, string player, string selection)
-        {
-            var game = _manager.Throw(groupName, player, Enum.Parse<Sign>(selection, true));
-            
-            if (game.Pending)
-                await Clients.Group(groupName).SendAsync("Pending", game.WaitingFor);
-            else
-            {
-                var winner = game.Winner;
-                var explanation = game.Explanation;
+    public Dictionary<string, string> GetAllPLayers()
+    {
+        return _players;
+    }
 
-                game.Reset();
 
-                if (winner == null)
-                    await Clients.Group(groupName).SendAsync("Drawn", explanation, game.Scores);
-                else
-                    await Clients.Group(groupName).SendAsync("Won", winner, explanation, game.Scores);
-            }
-        }
+    public override Task OnDisconnectedAsync(Exception exception)
+    {
+        _players.Remove(Context.ConnectionId);
+        return base.OnDisconnectedAsync(exception);
     }
 }

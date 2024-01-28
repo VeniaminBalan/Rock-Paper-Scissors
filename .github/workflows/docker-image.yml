@@ -1,0 +1,20 @@
+name: Docker Image CI for GHCR
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  build_and_publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Login to GHCR
+        run: docker login --username ${{ github.actor }} --password ${{ secrets.WORKFLOW_SECRET }} ghcr.io
+
+      - name: Build and push the image
+        run: |
+          docker build --tag ghcr.io/${{ vars.REPOSITORY }}/rps:latest .
+          docker push ghcr.io/${{ github.actor }}/rps:latest
