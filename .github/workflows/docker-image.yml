@@ -16,5 +16,5 @@ jobs:
 
       - name: Build and push the image
         run: |
-          docker build --tag ghcr.io/${{ vars.REPOSITORY }}/rps:latest .
+          docker build --tag ghcr.io/${{ github.actor }}/rps:latest .
           docker push ghcr.io/${{ github.actor }}/rps:latest
